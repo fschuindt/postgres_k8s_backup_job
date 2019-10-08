@@ -1,0 +1,53 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: psql-backup-config-map
+  labels:
+    owner: psql-backup
+data:
+  PGHOST: "postgres"
+  PGDB: "default"
+  PGUSER: "default"
+  PGPASSWORD: "default"
+  PGPORT: "5432"
+  S3_ACCESS_KEY_ID: ""
+  S3_SECRET_ACCESS_KEY: ""
+  S3_REGION: "us-east-1"
+  S3_DESTINATION: "s3://your-address"
+---
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: psql-backup-job
+  labels:
+    owner: psql-backup
+spec:
+  concurrencyPolicy: Forbid
+  failedJobsHistoryLimit: 5
+  successfulJobsHistoryLimit:
+  startingDeadlineSeconds: 60
+  # Every day at 10:00 PM UTC-3. (America/Sao_Paulo)
+  # or every day at 01:00 AM UTC.
+  schedule: "0 1 * * *"
+  jobTemplate:
+    metadata:
+      name: psql-backup-job
+      labels:
+        owner: psql-backup
+    spec:
+      activeDeadlineSeconds: 1800
+      backoffLimit: 3
+      template:
+        metadata:
+          name: psql-backup-job-pod
+          labels:
+            owner: psql-backup
+        spec:
+          containers:
+          - name: psql-backup-job-container
+            image: zfschuindt/postgres_k8s_backup_job
+            command: ["bash", "-c", "/backups/backup.sh"]
+            envFrom:
+              - configMapRef:
+                  name: psql-backup-config-map
+          restartPolicy: OnFailure
